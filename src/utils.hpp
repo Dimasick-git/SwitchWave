@@ -21,6 +21,7 @@
 #include <cstdlib>
 #include <cstdio>
 #include <cstring>
+#include <cerrno>
 #include <array>
 #include <string_view>
 #include <utility>
