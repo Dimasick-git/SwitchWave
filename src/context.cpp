@@ -1,4 +1,5 @@
 // Copyright (c) 2024 averne <averne381@gmail.com>
+// Copyright (c) 2025 Dimasick-git — логирование через SW_LOG, поддержка config-version
 //
 // This file is part of SwitchWave.
 //
@@ -16,6 +17,7 @@
 // along with SwitchWave.  If not, see <http://www.gnu.org/licenses/>.
 
 #include <cstdio>
+#include <cstring>
 #include <algorithm>
 
 #include <ini.h>
@@ -37,7 +39,7 @@ int Context::read_from_file() {
 
     std::string ini_text;
     if (utils::read_whole_file(ini_text, this->config_path.c_str(), "r")) {
-        std::printf("Failed to read %s\n", this->config_path.c_str());
+        SW_LOG_WARN("Failed to read config: %s", this->config_path.c_str());
         return -1;
     }
 
@@ -49,7 +51,11 @@ int Context::read_from_file() {
             v = std::string_view(value);
 
         if (s.length() == 0) {
-            if (n == "fast-presentation")
+            if (n == "config-version") {
+                int ver = std::atoi(v.data());
+                if (ver > Context::ConfigVersion)
+                    SW_LOG_WARN("Config version %d > app version %d, some keys may be ignored", ver, Context::ConfigVersion);
+            } else if (n == "fast-presentation")
                 self->use_fast_presentation = v != "no";
             else if (n == "disable-screensaver")
                 self->disable_screensaver   = v != "no";
@@ -89,14 +95,14 @@ int Context::read_from_file() {
             else if (n == "password")
                 info->password = v;
         } else {
-            std::printf("Unknown ini key [%s]%s = %s\n", s.data(), n.data(), v.data());
+            SW_LOG_DEBUG("Unknown ini key [%s]%s = %s", s.data(), n.data(), v.data());
         }
 
         return 0;
     };
 
     if (ini_parse_string(ini_text.c_str(), ini_parse_callback, this) < 0) {
-        std::printf("Failed to parse configuration\n");
+        SW_LOG_ERR("Failed to parse configuration: %s", this->config_path.c_str());
         return -1;
     }
 
@@ -106,7 +112,7 @@ int Context::read_from_file() {
 int Context::write_to_file() {
     auto *fp = std::fopen(this->config_path.c_str(), "w");
     if (!fp) {
-        std::printf("Failed to open %s\n", this->config_path.c_str());
+        SW_LOG_ERR("Failed to open config for writing: %s — %s", this->config_path.c_str(), std::strerror(errno));
         this->set_error(errno);
         return 1;
     }
@@ -119,6 +125,7 @@ int Context::write_to_file() {
     }                               \
 })
 
+    TRY_WRITE(std::fprintf(fp, "%s = %d\n",  "config-version",             Context::ConfigVersion));
     TRY_WRITE(std::fprintf(fp, "%s = %s\n",  "fast-presentation",          this->use_fast_presentation      ? "yes" : "no"));
     TRY_WRITE(std::fprintf(fp, "%s = %s\n",  "disable-screensaver",        this->disable_screensaver        ? "yes" : "no"));
     TRY_WRITE(std::fprintf(fp, "%s = %s\n",  "quit-to-home-menu",          this->quit_to_home_menu          ? "yes" : "no"));

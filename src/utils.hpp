@@ -1,4 +1,5 @@
 // Copyright (c) 2024 averne <averne381@gmail.com>
+// Copyright (c) 2025 Dimasick-git — улучшения: логирование, branch hints, утилиты
 //
 // This file is part of SwitchWave.
 //
@@ -28,6 +29,8 @@ namespace sw::utils {
 
 using namespace std::string_view_literals;
 
+// ── Препроцессорные утилиты ──────────────────────────────────────────────────
+
 #define _SW_CAT(x, y) x ## y
 #define  SW_CAT(x, y) _SW_CAT(x, y)
 #define _SW_STR(x) #x
@@ -40,6 +43,49 @@ using namespace std::string_view_literals;
 #define SW_UNUSED(...) ::sw::utils::variadic_unused(__VA_ARGS__)
 
 #define SW_ARRAYSIZE(a) (sizeof(a) / sizeof(*(a)))
+
+// ── Подсказки предсказателю ветвлений ────────────────────────────────────────
+
+#define SW_LIKELY(x)   __builtin_expect(!!(x), 1)
+#define SW_UNLIKELY(x) __builtin_expect(!!(x), 0)
+
+// ── Логирование ──────────────────────────────────────────────────────────────
+
+// Уровни журнала
+enum class LogLevel : int {
+    Debug   = 0,
+    Info    = 1,
+    Warn    = 2,
+    Error   = 3,
+};
+
+// Текущий минимальный уровень логирования (можно переопределить через -DSW_LOG_LEVEL=N)
+#ifndef SW_LOG_LEVEL
+#  ifdef DEBUG
+#    define SW_LOG_LEVEL 0
+#  else
+#    define SW_LOG_LEVEL 1
+#  endif
+#endif
+
+// Форматирование с указанием файла и строки
+#define SW_LOG(level, fmt, ...) \
+    do { \
+        if (static_cast<int>(level) >= SW_LOG_LEVEL) { \
+            const char *_lvl = (level == ::sw::utils::LogLevel::Error) ? "ERR" : \
+                               (level == ::sw::utils::LogLevel::Warn)  ? "WRN" : \
+                               (level == ::sw::utils::LogLevel::Info)  ? "INF" : "DBG"; \
+            std::printf("[%s] %s:%d: " fmt "\n", _lvl, __FILE_NAME__, __LINE__ \
+                __VA_OPT__(,) __VA_ARGS__); \
+        } \
+    } while (0)
+
+#define SW_LOG_DEBUG(fmt, ...) SW_LOG(::sw::utils::LogLevel::Debug, fmt __VA_OPT__(,) __VA_ARGS__)
+#define SW_LOG_INFO(fmt, ...)  SW_LOG(::sw::utils::LogLevel::Info,  fmt __VA_OPT__(,) __VA_ARGS__)
+#define SW_LOG_WARN(fmt, ...)  SW_LOG(::sw::utils::LogLevel::Warn,  fmt __VA_OPT__(,) __VA_ARGS__)
+#define SW_LOG_ERR(fmt, ...)   SW_LOG(::sw::utils::LogLevel::Error, fmt __VA_OPT__(,) __VA_ARGS__)
+
+// ── Базовые утилиты ──────────────────────────────────────────────────────────
 
 template <typename ...Args>
 __attribute__((always_inline))
@@ -55,13 +101,15 @@ constexpr auto align_up(auto v, auto a) {
     return align_down(v + a - 1, a);
 }
 
-constexpr auto bit(auto bit) {
-    return static_cast<decltype(bit)>(1) << bit;
+constexpr auto bit(auto b) {
+    return static_cast<decltype(b)>(1) << b;
 }
 
-constexpr auto mask(auto bit) {
-    return (static_cast<decltype(bit)>(1) << bit) - 1;
+constexpr auto mask(auto b) {
+    return (static_cast<decltype(b)>(1) << b) - 1;
 }
+
+// ── ScopeGuard ───────────────────────────────────────────────────────────────
 
 template <typename F>
 struct ScopeGuard {
@@ -71,7 +119,7 @@ struct ScopeGuard {
     ScopeGuard &operator =(const ScopeGuard &) = delete;
 
     ~ScopeGuard() {
-        if (this->want_run)
+        if (SW_LIKELY(this->want_run))
             this->f();
     }
 
@@ -84,49 +132,56 @@ struct ScopeGuard {
         F f;
 };
 
+// ── Размер в удобочитаемом формате ───────────────────────────────────────────
+
 static inline std::pair<double, std::string_view> to_human_size(std::size_t bytes) {
-    static std::array suffixes = {
+    static constexpr std::array suffixes = {
         "B"sv, "kiB"sv, "MiB"sv, "GiB"sv, "TiB"sv, "PiB"sv,
     };
 
-    // __builtin_clzll is undefined for 0
-    if (bytes == 0)
+    if (SW_UNLIKELY(bytes == 0))
         return { 0.0, suffixes[0] };
 
-    auto mag = (63 - __builtin_clzll(bytes)) / 10;
-    return { static_cast<double>(bytes) / (1 << mag*10), suffixes[mag] };
+    auto mag = std::min(std::size_t(63 - __builtin_clzll(bytes)) / 10, suffixes.size() - 1);
+    return { static_cast<double>(bytes) / (1ull << mag*10), suffixes[mag] };
 }
+
+// ── Чтение файла целиком ─────────────────────────────────────────────────────
 
 template <typename T>
 static inline int read_whole_file(T &container, const char *path, const char *mode) {
     FILE *fp = std::fopen(path, mode);
-    SW_SCOPEGUARD([fp] { std::fclose(fp); });
-    if (!fp) {
-        std::printf("Failed to open %s\n", path);
+    if (SW_UNLIKELY(!fp)) {
+        SW_LOG_WARN("Failed to open %s: %s", path, std::strerror(errno));
         return -1;
     }
+    SW_SCOPEGUARD([fp] { std::fclose(fp); });
 
     std::fseek(fp, 0, SEEK_END);
-    std::size_t fsize = std::ftell(fp);
+    auto fsize = static_cast<std::size_t>(std::ftell(fp));
     std::rewind(fp);
 
     container.resize(fsize);
 
-    if (auto read = std::fread(container.data(), 1, container.size(), fp); read != fsize) {
-        std::printf("Failed to read %s: got %ld, expected %ld\n", path, read, fsize);
+    if (auto read = std::fread(container.data(), 1, fsize, fp); read != fsize) {
+        SW_LOG_WARN("Failed to read %s: got %zu, expected %zu", path, read, fsize);
         return -1;
     }
 
     return 0;
 }
 
+// ── StaticString ─────────────────────────────────────────────────────────────
+
 template <std::size_t Size>
 class StaticString {
+    static_assert(Size > 0, "StaticString размер должен быть > 0");
+
     public:
         constexpr inline StaticString() = default;
 
         constexpr inline StaticString(const char *data) {
-            std::strncpy(this->storage, data, this->capacity());
+            if (data) std::strncpy(this->storage, data, this->capacity());
         }
 
         constexpr inline StaticString(std::string_view sv) {
@@ -135,12 +190,12 @@ class StaticString {
 
         template <std::size_t Size2>
         constexpr inline StaticString(const StaticString<Size2> &other) {
-            static_assert(Size >= Size2);
-            std::strncpy(this->storage, other.storage, this->capacity());
+            static_assert(Size >= Size2, "StaticString назначение: целевой размер слишком мал");
+            std::strncpy(this->storage, other.c_str(), this->capacity());
         }
 
         constexpr inline StaticString &operator=(const char *data) {
-            std::strncpy(this->storage, data, this->capacity());
+            if (data) std::strncpy(this->storage, data, this->capacity());
             return *this;
         }
 
@@ -151,37 +206,37 @@ class StaticString {
 
         template <std::size_t Size2>
         constexpr inline StaticString &operator=(const StaticString<Size2> &other) {
-            static_assert(Size >= Size2);
-            std::strncpy(this->storage, other.storage, this->capacity());
+            static_assert(Size >= Size2, "StaticString назначение: целевой размер слишком мал");
+            std::strncpy(this->storage, other.c_str(), this->capacity());
             return *this;
         }
 
         constexpr inline StaticString<Size> operator+(const char *data) const {
             StaticString<Size> out = *this;
-            std::strncat(out.data(), data, out.capacity());
+            if (data) std::strncat(out.data(), data, out.capacity() - out.length());
             return out;
         }
 
         constexpr inline StaticString<Size> operator+(std::string_view sv) const {
             StaticString<Size> out = *this;
-            std::strncat(out.data(), sv.data(), out.capacity());
+            std::strncat(out.data(), sv.data(), out.capacity() - out.length());
             return out;
         }
 
         template <std::size_t Size2>
         constexpr inline StaticString<Size> operator+(const StaticString<Size2> &other) const {
             StaticString<Size> out = *this;
-            std::strncat(out.data(), other.c_str(), out.capacity());
+            std::strncat(out.data(), other.c_str(), out.capacity() - out.length());
             return out;
         }
 
         template <std::size_t Size2>
-        constexpr inline bool operator==(const StaticString<Size2> other) const {
+        constexpr inline bool operator==(const StaticString<Size2> &other) const {
             return std::string_view(*this) == std::string_view(other);
         }
 
         template <std::size_t Size2>
-        constexpr inline auto operator<=>(const StaticString<Size2> other) const {
+        constexpr inline auto operator<=>(const StaticString<Size2> &other) const {
             return std::string_view(*this) <=> std::string_view(other);
         }
 
@@ -197,6 +252,18 @@ class StaticString {
             return this->storage;
         }
 
+        constexpr inline const char *data() const {
+            return this->storage;
+        }
+
+        constexpr inline bool empty() const {
+            return this->storage[0] == '\0';
+        }
+
+        constexpr inline void clear() {
+            this->storage[0] = '\0';
+        }
+
         constexpr inline std::size_t size() const {
             return std::strlen(this->storage);
         }
@@ -205,7 +272,7 @@ class StaticString {
             return std::strlen(this->storage);
         }
 
-        constexpr inline static std::size_t capacity() {
+        constexpr static inline std::size_t capacity() {
             return Size - 1;
         }
 
@@ -213,9 +280,10 @@ class StaticString {
         char storage[Size] = {};
 };
 
-using StaticString8  = StaticString< 8>;
-using StaticString16 = StaticString<16>;
-using StaticString32 = StaticString<32>;
-using StaticString64 = StaticString<64>;
+using StaticString8   = StaticString< 8>;
+using StaticString16  = StaticString<16>;
+using StaticString32  = StaticString<32>;
+using StaticString64  = StaticString<64>;
+using StaticString128 = StaticString<128>;
 
 } // namespace sw::utils

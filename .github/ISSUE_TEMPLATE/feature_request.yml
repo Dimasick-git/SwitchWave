@@ -1,0 +1,40 @@
+name: "Предложение / Feature Request"
+description: "Предложить новую функцию / Suggest a new feature"
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Спасибо за идею! / Thanks for the suggestion!
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: "Какую проблему решает / What Problem Does This Solve"
+      description: "Опишите ситуацию, в которой отсутствие функции вызывает неудобство"
+      placeholder: "Сейчас нельзя... / Currently it's not possible to..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: "Желаемое решение / Proposed Solution"
+      description: "Как должна работать новая функция?"
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: "Альтернативы / Alternatives Considered"
+      description: "Какие другие подходы вы рассматривали?"
+
+  - type: dropdown
+    id: priority
+    attributes:
+      label: "Приоритет / Priority"
+      options:
+        - "Низкий / Low"
+        - "Средний / Medium"
+        - "Высокий / High"

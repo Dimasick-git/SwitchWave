@@ -1,0 +1,69 @@
+name: "Баг / Bug Report"
+description: "Сообщить о проблеме / Report a bug"
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Спасибо, что нашли время сообщить об ошибке!
+        Thanks for taking the time to report a bug!
+
+  - type: input
+    id: version
+    attributes:
+      label: "Версия SwitchWave / SwitchWave Version"
+      description: "Укажите версию из NACP или Makefile / Version from NACP or Makefile"
+      placeholder: "1.1.1"
+    validations:
+      required: true
+
+  - type: input
+    id: firmware
+    attributes:
+      label: "Версия прошивки Nintendo Switch / Firmware Version"
+      placeholder: "19.0.1"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: applet_mode
+    attributes:
+      label: "Режим запуска / Launch Mode"
+      options:
+        - "Приложение (Application Mode)"
+        - "Аплет (Applet Mode)"
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: "Описание проблемы / Bug Description"
+      description: "Что произошло? Что ожидалось? / What happened? What was expected?"
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: "Шаги для воспроизведения / Steps to Reproduce"
+      placeholder: |
+        1. Открыть файл...
+        2. Нажать кнопку...
+        3. Произошла ошибка...
+    validations:
+      required: true
+
+  - type: textarea
+    id: media_info
+    attributes:
+      label: "Информация о медиафайле / Media File Info"
+      description: "Формат, кодек, контейнер, источник (SD/USB/SMB/NFS/HTTP) / Format, codec, container, source"
+      placeholder: "mkv / h264 + AAC / SD card"
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: "Логи / Logs"
+      description: "Вставьте содержимое лога mpv или вывода nxlink / Paste mpv log or nxlink output"
+      render: "text"

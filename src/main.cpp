@@ -1,4 +1,5 @@
 // Copyright (c) 2024 averne <averne381@gmail.com>
+// Copyright (c) 2025 Dimasick-git — логирование через SW_LOG вместо printf
 //
 // This file is part of SwitchWave.
 //
@@ -137,7 +138,7 @@ void mpv_presetup() {
 
     std::fwrite(font.address, font.size, 1, fp);
 
-    std::printf("Dumped standard font\n");
+    SW_LOG_INFO("Dumped standard font to %s", font_file.c_str());
 }
 
 // libusbhsfs invokes the populate callback on its USB-event thread.
@@ -259,12 +260,12 @@ int video_loop(sw::Renderer &renderer, sw::Context &context) {
 #endif
 
     if (auto rc = lmpv.initialize(); rc < 0) {
-        std::printf("Failed to initialize libmpv\n");
+        SW_LOG_ERR("Failed to initialize libmpv: %d", rc);
         return rc;
     }
 
     if (auto rc = renderer.create_mpv_render_context(lmpv); rc < 0) {
-        std::printf("Failed to initialize mpv render context\n");
+        SW_LOG_ERR("Failed to initialize mpv render context: %d", rc);
         return rc;
     }
 
@@ -361,7 +362,7 @@ int video_loop(sw::Renderer &renderer, sw::Context &context) {
 } // namespace
 
 int main(int argc, const char **argv) {
-    std::printf("Starting " APP_TITLE ", v" APP_VERSION ", built: " __DATE__ " " __TIME__ "\n");
+    SW_LOG_INFO("Starting " APP_TITLE " v" APP_VERSION " (built: " __DATE__ " " __TIME__ ")");
 
     auto setup_thread = std::jthread(&mpv_presetup);
 
@@ -382,13 +383,13 @@ int main(int argc, const char **argv) {
 
     static sw::Renderer renderer;
     if (renderer.initialize()) {
-        std::printf("Failed to initialize renderer\n");
+        SW_LOG_ERR("Failed to initialize renderer");
         return 1;
     }
 
     static sw::Context context;
     if (context.read_from_file())
-        std::printf("Failed to read configuration from file\n");
+        SW_LOG_WARN("Failed to read configuration from file, using defaults");
 
     if (!g_application_mode)
         context.set_error(-1, sw::Context::ErrorType::AppletMode);
@@ -410,7 +411,7 @@ int main(int argc, const char **argv) {
     if (auto rc = context.ums.initialize(); R_SUCCEEDED(rc))
         context.ums.set_devices_changed_callback(ums_devices_changed_cb, &context);
     else
-        std::printf("Failed to initialize ums controller: %#x\n", rc);
+        SW_LOG_WARN("Failed to initialize UMS controller: 0x%08x", rc);
     SW_SCOPEGUARD([] { context.ums.finalize(); });
 
     auto network_setup_thread = std::jthread([] {
@@ -428,7 +429,7 @@ int main(int argc, const char **argv) {
     while (!context.want_quit) {
         if (!context.cur_file.empty()) {
             if (auto rc = video_loop(renderer, context)) {
-                std::printf("Failed to run player: %d (%s)\n", rc, mpv_error_string(rc));
+                SW_LOG_ERR("Player error: %d (%s)", rc, mpv_error_string(rc));
                 context.set_error(rc, sw::Context::ErrorType::Mpv);
             } else {
                 recent->add(context.cur_file);
@@ -439,7 +440,7 @@ int main(int argc, const char **argv) {
             break;
 
         if (auto rc = menu_loop(renderer, context))
-            std::printf("Failed to run menu: %d\n", rc);
+            SW_LOG_ERR("Menu loop error: %d", rc);
     }
 
     // Clear the screen before quitting
@@ -448,14 +449,14 @@ int main(int argc, const char **argv) {
     renderer.end_frame();
 
     if (recent->write_to_file())
-        std::printf("Failed to write history to file\n");
+        SW_LOG_WARN("Failed to write history to file");
 
     if (context.write_to_file())
-        std::printf("Failed to write config to file\n");
+        SW_LOG_WARN("Failed to write config to file");
 
     if (context.quit_to_home_menu && !context.cli_mode)
         __nx_applet_exit_mode = 1;
 
-    std::printf("Properly exiting\n");
+    SW_LOG_INFO("Exiting cleanly");
     return 0;
 }
