@@ -1,0 +1,44 @@
+name: Сборка / Build
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Получить код / Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Получить версию из Makefile / Extract version
+        id: version
+        run: |
+          VERSION=$(grep '^APP_VERSION' Makefile | sed 's/.*:=\s*//' | tr -d ' ')
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+          echo "Версия / Version: ${VERSION}"
+
+      - name: Настроить Docker Buildx / Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Собрать образ сборщика / Build toolchain image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          load: true
+          tags: switchwave-builder
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Собрать SwitchWave / Build SwitchWave
+        run: ./build-docker.sh
+
+      - name: Загрузить артефакт / Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: SwitchWave-${{ steps.version.outputs.version }}-${{ github.sha }}
+          path: build/SwitchWave-*.zip
+          if-no-files-found: warn

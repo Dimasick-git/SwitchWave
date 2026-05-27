@@ -1,0 +1,137 @@
+name: Синхронизация с оригиналом / Sync Upstream
+
+on:
+  schedule:
+    # Каждый понедельник в 06:00 UTC / Every Monday at 06:00 UTC
+    - cron: '0 6 * * 1'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Только показать изменения, без PR / Dry run (show changes only, no PR)'
+        required: false
+        default: 'false'
+        type: boolean
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+
+    steps:
+      - name: Получить код / Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Настроить git / Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Добавить upstream remote / Add upstream remote
+        run: |
+          git remote add upstream https://github.com/averne/SwitchWave.git || true
+          git fetch upstream master --depth=1
+
+      - name: Проверить наличие изменений / Check for changes
+        id: changes
+        run: |
+          CHANGED=$(git diff HEAD upstream/master --name-only 2>/dev/null | wc -l)
+          echo "count=${CHANGED}" >> $GITHUB_OUTPUT
+          echo "Изменённых файлов / Changed files: ${CHANGED}"
+          git diff HEAD upstream/master --name-only 2>/dev/null > /tmp/upstream_changed.txt || true
+          cat /tmp/upstream_changed.txt
+
+      - name: Создать ветку синхронизации / Create sync branch
+        if: steps.changes.outputs.count != '0'
+        id: branch
+        run: |
+          BRANCH="sync/upstream-$(date +%Y%m%d-%H%M)"
+          git checkout -b "${BRANCH}"
+          echo "name=${BRANCH}" >> $GITHUB_OUTPUT
+
+      - name: Применить изменения (кроме защищённых) / Apply changes (skip protected files)
+        if: steps.changes.outputs.count != '0'
+        run: |
+          # Список наших кастомных файлов — НЕ перезаписываем
+          # Our custom files — do NOT overwrite
+          declare -A PROTECTED=(
+            ["README.md"]=1
+            ["AUTHORS.md"]=1
+            ["CHANGELOG.md"]=1
+            [".github/workflows/release.yml"]=1
+            [".github/workflows/sync-upstream.yml"]=1
+            ["src/i18n.hpp"]=1
+            ["src/i18n/ru.hpp"]=1
+            ["src/i18n/en.hpp"]=1
+          )
+
+          APPLIED=0
+          SKIPPED=0
+
+          while IFS= read -r file; do
+            [ -z "$file" ] && continue
+
+            if [[ -n "${PROTECTED[$file]}" ]]; then
+              echo "  [ПРОПУСК / SKIP] ${file}"
+              SKIPPED=$((SKIPPED + 1))
+            else
+              git checkout upstream/master -- "${file}" 2>/dev/null && \
+                echo "  [ПРИМЕНЕНО / APPLIED] ${file}" && \
+                APPLIED=$((APPLIED + 1)) || \
+                echo "  [ОШИБКА / ERROR] ${file}"
+            fi
+          done < /tmp/upstream_changed.txt
+
+          echo ""
+          echo "Применено / Applied: ${APPLIED}, пропущено / skipped: ${SKIPPED}"
+
+      - name: Коммит изменений / Commit changes
+        if: steps.changes.outputs.count != '0' && inputs.dry_run != 'true'
+        id: commit
+        run: |
+          git add -A
+          if git diff --staged --quiet; then
+            echo "Нет изменений после фильтрации / No changes after filtering"
+            echo "has_changes=false" >> $GITHUB_OUTPUT
+          else
+            UPSTREAM_VERSION=$(git show upstream/master:Makefile 2>/dev/null | grep '^APP_VERSION' | sed 's/.*:=\s*//' | tr -d ' ' || echo "unknown")
+            git commit -m "sync: обновление из averne/SwitchWave upstream (v${UPSTREAM_VERSION})"
+            echo "has_changes=true" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Отправить ветку / Push branch
+        if: steps.changes.outputs.count != '0' && steps.commit.outputs.has_changes == 'true' && inputs.dry_run != 'true'
+        run: |
+          git push origin "${{ steps.branch.outputs.name }}"
+
+      - name: Создать Pull Request / Create Pull Request
+        if: steps.changes.outputs.count != '0' && steps.commit.outputs.has_changes == 'true' && inputs.dry_run != 'true'
+        uses: peter-evans/create-pull-request@v6
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          branch: ${{ steps.branch.outputs.name }}
+          title: "sync: обновление из upstream averne/SwitchWave"
+          body: |
+            ## Автоматическая синхронизация с upstream / Auto-sync from upstream
+
+            Этот PR содержит изменения из [averne/SwitchWave](https://github.com/averne/SwitchWave),
+            применённые автоматически с пропуском защищённых файлов.
+
+            This PR contains changes from [averne/SwitchWave](https://github.com/averne/SwitchWave),
+            applied automatically while skipping protected files.
+
+            ### Защищённые файлы (не изменены) / Protected files (not changed)
+            - `README.md`, `AUTHORS.md`, `CHANGELOG.md`
+            - `.github/workflows/release.yml`, `.github/workflows/sync-upstream.yml`
+            - `src/i18n.hpp`, `src/i18n/ru.hpp`, `src/i18n/en.hpp`
+
+            ### Перед слиянием / Before merging
+            - [ ] Проверьте изменения в UI файлах на совместимость с i18n
+            - [ ] Убедитесь что i18n строки соответствуют новым UI строкам
+            - [ ] Запустите сборку для проверки
+          labels: "sync,upstream"
+          draft: false

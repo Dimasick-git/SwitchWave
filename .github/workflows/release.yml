@@ -1,0 +1,87 @@
+name: Автоматический релиз / Auto Release
+
+on:
+  push:
+    branches:
+      - main
+      - master
+
+jobs:
+  check-and-release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Получить код / Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Получить версию из Makefile / Extract version
+        id: version
+        run: |
+          VERSION=$(grep '^APP_VERSION' Makefile | sed 's/.*:=\s*//' | tr -d ' ')
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+          echo "tag=v${VERSION}" >> $GITHUB_OUTPUT
+          echo "Версия / Version: ${VERSION}"
+
+      - name: Проверить существующий тег / Check existing tag
+        id: check_tag
+        run: |
+          if git ls-remote --tags origin "refs/tags/v${{ steps.version.outputs.version }}" | grep -q .; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+            echo "Тег v${{ steps.version.outputs.version }} уже существует — пропуск релиза"
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+            echo "Новая версия v${{ steps.version.outputs.version }} — создаём релиз"
+          fi
+
+      - name: Настроить Docker Buildx / Set up Docker Buildx
+        if: steps.check_tag.outputs.exists == 'false'
+        uses: docker/setup-buildx-action@v3
+
+      - name: Собрать образ сборщика / Build toolchain image
+        if: steps.check_tag.outputs.exists == 'false'
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          load: true
+          tags: switchwave-builder
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Собрать SwitchWave / Build SwitchWave
+        if: steps.check_tag.outputs.exists == 'false'
+        run: ./build-docker.sh
+
+      - name: Создать релиз / Create release
+        if: steps.check_tag.outputs.exists == 'false'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          name: "SwitchWave ${{ steps.version.outputs.tag }}"
+          body: |
+            ## SwitchWave ${{ steps.version.outputs.tag }}
+
+            Форк с русской локализацией и улучшениями — **Dimasick-git**
+            Fork with Russian localization and improvements — **Dimasick-git**
+
+            Оригинальный проект / Original project: [averne/SwitchWave](https://github.com/averne/SwitchWave)
+
+            ---
+
+            ### Установка / Installation
+
+            1. Скачайте архив ниже / Download the archive below
+            2. Распакуйте в корень SD-карты / Extract to the root of your SD card
+               *(объединяйте папки, не перезаписывайте / merge folders, do not overwrite)*
+            3. Запустите через hbmenu / Launch via hbmenu
+
+            ### Что нового в этой версии / What's new
+
+            Смотрите историю коммитов / See commit history for details.
+          files: build/SwitchWave-*.zip
+          draft: false
+          prerelease: false
