@@ -1,5 +1,4 @@
 // Copyright (c) 2024 averne <averne381@gmail.com>
-// Copyright (c) 2025 Dimasick-git — улучшения: логирование, ConfigVersion, set_error с логами
 //
 // This file is part of SwitchWave.
 //
@@ -34,10 +33,6 @@ class Context {
         constexpr static std::string_view AppDirectory     = "sdmc:/switch/SwitchWave";
         constexpr static std::string_view SettingsFilename = "SwitchWave.conf";
         constexpr static std::string_view HistoryFilename  = "history.txt";
-
-        // Версия формата конфигурации — увеличьте при добавлении новых полей
-        // чтобы старые конфиги корректно мигрировали
-        constexpr static int ConfigVersion = 1;
 
     public:
         enum ErrorType {
@@ -90,16 +85,6 @@ class Context {
         inline void set_error(int error, Context::ErrorType type = Context::ErrorType::Io) {
             this->last_error      = error;
             this->last_error_type = type;
-            SW_LOG_WARN("set_error: type=%d code=%d", static_cast<int>(type), error);
-        }
-
-        inline bool has_error() const {
-            return this->last_error != 0;
-        }
-
-        inline void clear_error() {
-            this->last_error      = 0;
-            this->last_error_type = ErrorType::Io;
         }
 
         inline const fs::Filesystem *get_filesystem(std::string_view mountpoint) const {

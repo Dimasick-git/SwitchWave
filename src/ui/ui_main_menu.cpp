@@ -1,5 +1,4 @@
 // Copyright (c) 2024 averne <averne381@gmail.com>
-// Copyright (c) 2025 Dimasick-git — русская локализация / Russian localization
 //
 // This file is part of SwitchWave.
 //
@@ -42,7 +41,6 @@ extern "C" {
 #include <ass/ass.h>
 
 #include "utils.hpp"
-#include "i18n.hpp"
 #include "fs/fs_recent.hpp"
 #include "fs/fs_http.hpp"
 
@@ -120,27 +118,27 @@ void MainMenuGui::render() {
         // ImGui::SetCursorPosX(this->screen_rel_width(0.2));
         // ImGui::Dummy(this->screen_rel_vec<ImVec2>(0.2, 0));
 
-        if (ImGui::BeginTabItem(T::TabExplorer, nullptr, ImGuiTabItemFlags_NoReorder)) {
+        if (ImGui::BeginTabItem("Explorer", nullptr, ImGuiTabItemFlags_NoReorder)) {
             SW_SCOPEGUARD([] { ImGui::EndTabItem(); });
             this->cur_tab = Tab::Explorer;
         }
 
-        if (ImGui::BeginTabItem(T::TabEditor, nullptr, ImGuiTabItemFlags_NoReorder)) {
+        if (ImGui::BeginTabItem("Editor",     nullptr, ImGuiTabItemFlags_NoReorder)) {
             SW_SCOPEGUARD([] { ImGui::EndTabItem(); });
             this->cur_tab = Tab::ConfigEdit;
         }
 
-        if (ImGui::BeginTabItem(T::TabSettings, nullptr, ImGuiTabItemFlags_NoReorder)) {
+        if (ImGui::BeginTabItem("Settings", nullptr, ImGuiTabItemFlags_NoReorder)) {
             SW_SCOPEGUARD([] { ImGui::EndTabItem(); });
             this->cur_tab = Tab::Settings;
         }
 
-        if (ImGui::BeginTabItem(T::TabInfoHelp, nullptr, ImGuiTabItemFlags_NoReorder)) {
+        if (ImGui::BeginTabItem("Info & Help", nullptr, ImGuiTabItemFlags_NoReorder)) {
             SW_SCOPEGUARD([] { ImGui::EndTabItem(); });
             this->cur_tab = Tab::InfoHelp;
         }
 
-        if (ImGui::TabItemButton(T::TabExit, ImGuiTabItemFlags_NoReorder))
+        if (ImGui::TabItemButton("Exit", ImGuiTabItemFlags_NoReorder))
             this->context.want_quit = true;
 
         this->explorer.is_displayed = this->editor.is_displayed =
@@ -169,11 +167,11 @@ void MainMenuGui::render() {
 
     if (context.last_error) {
         static const char *error_type_description[] = {
-            [Context::ErrorType::Io]         = T::ErrIo,
-            [Context::ErrorType::Network]    = T::ErrNetwork,
-            [Context::ErrorType::Mpv]        = T::ErrPlayer,
-            [Context::ErrorType::LibAv]      = T::ErrLibAv,
-            [Context::ErrorType::AppletMode] = T::ErrApplet,
+            [Context::ErrorType::Io]         = "I/O error",
+            [Context::ErrorType::Network]    = "Network error",
+            [Context::ErrorType::Mpv]        = "Player error",
+            [Context::ErrorType::LibAv]      = "LibAV error",
+            [Context::ErrorType::AppletMode] = "Applet mode",
         };
 
         char buf[AV_ERROR_MAX_STRING_SIZE];
@@ -191,7 +189,7 @@ void MainMenuGui::render() {
                 error_desc = av_make_error_string(buf, sizeof(buf), this->context.last_error);
                 break;
             case Context::ErrorType::AppletMode:
-                error_desc = T::ErrAppletDesc;
+                error_desc = "Starting in applet mode.\nThis may lead to stability issues.";
                 break;
         }
 
@@ -212,7 +210,7 @@ void MainMenuGui::render() {
                 ImGui::TextWrapped("%s (%d)", error_desc, context.last_error);
             }
 
-            auto ok_string = T::BtnOk;
+            auto ok_string = "Ok";
             auto size = ImGui::GetContentRegionAvail() - ImGui::CalcTextSize(ok_string) -
                 imstyle.ItemInnerSpacing - imstyle.ItemSpacing;
 
@@ -366,7 +364,7 @@ void MediaExplorer::render() {
         this->context.cur_file = std::move(this->explorer.selection.base());
 
     ImGui::TableNextColumn();
-    ImGui::SeparatorText(T::SecDescription);
+    ImGui::SeparatorText("Description");
 
     auto ent_idx = this->explorer.cur_focused_entry;
     if (ent_idx == -1ul)
@@ -377,19 +375,19 @@ void MediaExplorer::render() {
     ImGui::NewLine();
 
     auto fname = Explorer::filename_from_entry_name(entry.name);
-    ImGui::TextWrapped(T::FmtName, int(fname.length()), fname.data());
+    ImGui::TextWrapped("Name: %.*s", int(fname.length()), fname.data());
 
     if (entry.type == fs::Node::Type::Directory)
         return;
 
     auto [size, suffix] = utils::to_human_size(entry.size);
-    ImGui::Text(T::FmtSize, size, suffix.data());
+    ImGui::Text("Size: %.2f%s", size, suffix.data());
 
     ImGui::NewLine();
 
     auto &metadata = this->media_metadata[ent_idx];
     if (!metadata) {
-        bool ret = ImGui::Button(T::BtnShowMeta, ImVec2(-1, 0));
+        bool ret = ImGui::Button("Press \ue0e6/\ue0e7 to show metadata", ImVec2(-1, 0));
         if (ret || ImGui::IsKeyPressed(ImGuiKey_GamepadL2) || ImGui::IsKeyPressed(ImGuiKey_GamepadR2)) {
             metadata = std::make_unique<MediaMetadata>();
 
@@ -414,27 +412,27 @@ void MediaExplorer::render() {
     SW_SCOPEGUARD([this] { ImGui::SetWindowFontScale(this->scale_factor()); });
 
     auto &i = *metadata;
-    ImGui::TextWrapped(T::FmtFormat, i.container_name,
+    ImGui::TextWrapped("Format: %s (%d stream%s)", i.container_name,
         i.num_streams, i.num_streams != 1 ? "s" : "");
-    ImGui::TextWrapped(T::FmtDuration, FORMAT_TIME(i.duration));
+    ImGui::TextWrapped("Duration: %ld:%02ld:%02ld", FORMAT_TIME(i.duration));
 
-    ImGui::SeparatorText(T::SecVideo);
-    bullet_wrapped(T::FmtStreams, i.num_vstreams, i.num_vstreams != 1 ? "s" : "");
-    bullet_wrapped(T::FmtCodec, i.video_codec_name);
-    if (i.video_profile_name) bullet_wrapped(T::FmtProfile, i.video_profile_name);
-    bullet_wrapped(T::FmtDimensions, i.video_width, i.video_height);
-    bullet_wrapped(T::FmtFramerate, i.video_framerate);
-    bullet_wrapped(T::FmtPixFmt, i.video_pix_format);
+    ImGui::SeparatorText("Video");
+    bullet_wrapped("%d stream%s", i.num_vstreams, i.num_vstreams != 1 ? "s" : "");
+    bullet_wrapped("Codec: %s", i.video_codec_name);
+    if (i.video_profile_name) bullet_wrapped("Profile: %s", i.video_profile_name);
+    bullet_wrapped("Dimensions: %dx%d", i.video_width, i.video_height);
+    bullet_wrapped("Framerate: %.3fHz", i.video_framerate);
+    bullet_wrapped("Pixel format: %s", i.video_pix_format);
 
-    ImGui::SeparatorText(T::SecAudio);
-    bullet_wrapped(T::FmtStreams, i.num_astreams, i.num_astreams != 1 ? "s" : "");
-    bullet_wrapped(T::FmtCodecChannels, i.audio_codec_name, i.num_audio_channels);
-    if (i.audio_profile_name) bullet_wrapped(T::FmtProfile, i.audio_profile_name);
-    bullet_wrapped(T::FmtSamplerate, i.audio_sample_rate);
-    bullet_wrapped(T::FmtSampleFmt, i.audio_sample_format);
+    ImGui::SeparatorText("Audio");
+    bullet_wrapped("%d stream%s", i.num_astreams, i.num_astreams != 1 ? "s" : "");
+    bullet_wrapped("Codec: %s (%d channels)", i.audio_codec_name, i.num_audio_channels);
+    if (i.audio_profile_name) bullet_wrapped("Profile: %s", i.audio_profile_name);
+    bullet_wrapped("Samplerate: %dHz", i.audio_sample_rate);
+    bullet_wrapped("Sample format: %s", i.audio_sample_format);
 
-    ImGui::SeparatorText(T::SecSubtitles);
-    bullet_wrapped(T::FmtStreams, i.num_sstreams, i.num_sstreams != 1 ? "s" : "");
+    ImGui::SeparatorText("Subtitles");
+    bullet_wrapped("%d stream%s", i.num_sstreams, i.num_sstreams != 1 ? "s" : "");
 }
 
 ConfigEditor::ConfigEditor(Renderer &renderer, Context &context): Widget(renderer), context(context) {
@@ -550,13 +548,13 @@ void ConfigEditor::render() {
         auto col = (ImGui::nx::getCurrentTheme() == ColorSetId_Dark) ?
             ImColor(0xf2, 0x77, 0x7a) : ImColor(0xbb, 0x11, 0x14);
         ImGui::SameLine(0, this->screen_rel_width(0.08));
-        ImGui::TextColored(col, T::WarnUnsaved);
+        ImGui::TextColored(col, "You have unsaved changes");
     }
 
     ImGui::SameLine();
     ImGui::SetCursorScreenPos(ImVec2(this->screen_rel_width(0.88), ImGui::GetCursorScreenPos().y));
 
-    if (ImGui::Button(T::BtnSave)) {
+    if (ImGui::Button("Save")) {
         if (this->save_text()) {
             this->is_in_error         = true;
         } else {
@@ -565,7 +563,7 @@ void ConfigEditor::render() {
     }
 
     ImGui::SameLine();
-    if (ImGui::Button(T::BtnReset)) {
+    if (ImGui::Button("Reset")) {
         if (this->reset_text()) {
             this->is_in_error         = true;
         } else {
@@ -581,8 +579,8 @@ void ConfigEditor::render() {
         ImGui::BeginGroup();
         SW_SCOPEGUARD([] { ImGui::EndGroup(); });
 
-        ImGui::TextColored(ImColor(200, 50, 10), T::ErrLoadConfig);
-        if (ImGui::Button(T::BtnCreateFile)) {
+        ImGui::TextColored(ImColor(200, 50, 10), "Failed to load configuration file");
+        if (ImGui::Button("Create file")) {
             auto *fp = std::fopen(this->config_path.data(), "w");
             this->is_in_error = fp == nullptr;
             std::fclose(fp);
@@ -746,7 +744,7 @@ bool SettingsEditor::update_state(PadState &pad, HidTouchScreenState &touch) {
 }
 
 void SettingsEditor::render() {
-    ImGui::Text(T::TabSettings);
+    ImGui::Text("Settings");
 
     ImGui::SameLine((ImGui::GetContentRegionAvail() -
         ImGui::CalcTextSize(app_version_str.data(), app_version_str.data() + app_version_str.size())).x);
@@ -754,19 +752,19 @@ void SettingsEditor::render() {
 
     ImGui::SeparatorEx(ImGuiSeparatorFlags_Horizontal, 3.0f);
 
-    if (ImGui::Button(T::BtnReadFromFile)) {
+    if (ImGui::Button("Read from file")) {
         if (this->context.read_from_file())
             std::printf("Failed to read configuration\n");
     }
 
     ImGui::SameLine();
-    if (ImGui::Button(T::BtnSaveToFile)) {
+    if (ImGui::Button("Save to file")) {
         if (this->context.write_to_file())
             std::printf("Failed to save configuration\n");
     }
 
     ImGui::NewLine();
-    ImGui::Text(T::SecNetwork);
+    ImGui::Text("Network");
 
     utils::StaticString64 id_buffer;
     auto make_id = [&id_buffer](std::size_t i, std::string_view s) {
@@ -822,15 +820,15 @@ void SettingsEditor::render() {
         SW_SCOPEGUARD([&] { ImGui::SetWindowFontScale(1.0); });
 
         ImGui::TableSetupScrollFreeze(0, 1);
-        ImGui::TableSetupColumn("##delcol",       ImGuiTableColumnFlags_WidthFixed, this->screen_rel_width(0.02));
-        ImGui::TableSetupColumn(T::ColType,       ImGuiTableColumnFlags_WidthFixed, this->screen_rel_width(0.06));
-        ImGui::TableSetupColumn(T::ColName);
-        ImGui::TableSetupColumn(T::ColHost,       ImGuiTableColumnFlags_WidthFixed, this->screen_rel_width(0.15));
-        ImGui::TableSetupColumn(T::ColPort,       ImGuiTableColumnFlags_WidthFixed, this->screen_rel_width(0.06));
-        ImGui::TableSetupColumn(T::ColShare,      ImGuiTableColumnFlags_WidthFixed, this->screen_rel_width(0.15));
-        ImGui::TableSetupColumn(T::ColUsername,   ImGuiTableColumnFlags_WidthFixed, this->screen_rel_width(0.12));
-        ImGui::TableSetupColumn(T::ColPassword,   ImGuiTableColumnFlags_WidthFixed, this->screen_rel_width(0.12));
-        ImGui::TableSetupColumn(T::ColStatus,     ImGuiTableColumnFlags_WidthFixed, this->screen_rel_width(0.09));
+        ImGui::TableSetupColumn("##delcol",   ImGuiTableColumnFlags_WidthFixed, this->screen_rel_width(0.02));
+        ImGui::TableSetupColumn("Type",       ImGuiTableColumnFlags_WidthFixed, this->screen_rel_width(0.06));
+        ImGui::TableSetupColumn("Name");
+        ImGui::TableSetupColumn("Host",       ImGuiTableColumnFlags_WidthFixed, this->screen_rel_width(0.15));
+        ImGui::TableSetupColumn("Port",       ImGuiTableColumnFlags_WidthFixed, this->screen_rel_width(0.06));
+        ImGui::TableSetupColumn("Share/path", ImGuiTableColumnFlags_WidthFixed, this->screen_rel_width(0.15));
+        ImGui::TableSetupColumn("Username",   ImGuiTableColumnFlags_WidthFixed, this->screen_rel_width(0.12));
+        ImGui::TableSetupColumn("Password",   ImGuiTableColumnFlags_WidthFixed, this->screen_rel_width(0.12));
+        ImGui::TableSetupColumn("Status",     ImGuiTableColumnFlags_WidthFixed, this->screen_rel_width(0.09));
         ImGui::TableHeadersRow();
 
         for (std::size_t i = 0; i < this->context.network_infos.size(); ++i) {
@@ -896,7 +894,7 @@ void SettingsEditor::render() {
 
             ImGui::TableNextColumn();
             bool is_connected = info->fs && info->fs->connected();
-            if (ImGui::Button(make_id(i, !is_connected ? T::BtnConnect : T::BtnDisconnect))) {
+            if (ImGui::Button(make_id(i, !is_connected ? "Connect" : "Disconnect"))) {
                 int ret;
                 if (!is_connected)
                     ret = this->context.register_network_fs  (*info);
@@ -919,7 +917,7 @@ void SettingsEditor::render() {
         this->has_swkbd_visible = false;
     }
 
-    if (ImGui::Button(T::BtnNew))
+    if (ImGui::Button("New"))
         this->context.network_infos.push_back(std::make_unique<Context::NetworkFsInfo>());
 
     ImGui::NewLine();
@@ -928,28 +926,28 @@ void SettingsEditor::render() {
     SW_SCOPEGUARD([] { ImGui::EndTable (); });
 
     ImGui::TableNextColumn();
-    ImGui::Text(T::SecVideoSettings);
+    ImGui::Text("Video");
 
-    ImGui::Checkbox(T::ChkFastPresentation,     &this->context.use_fast_presentation);
-    ImGui::Checkbox(T::ChkDisableScreensaver,   &this->context.disable_screensaver);
-    ImGui::Checkbox(T::ChkOverrideScreenshot,   &this->context.override_screenshot_button);
+    ImGui::Checkbox("Use fast presentation",      &this->context.use_fast_presentation);
+    ImGui::Checkbox("Disable screensaver",        &this->context.disable_screensaver);
+    ImGui::Checkbox("Override screenshot button", &this->context.override_screenshot_button);
 
     ImGui::NewLine();
-    ImGui::Text(T::SecMisc);
-    ImGui::Checkbox(T::ChkQuitHome,             &this->context.quit_to_home_menu);
+    ImGui::Text("Misc");
+    ImGui::Checkbox("Quit to home menu",          &this->context.quit_to_home_menu);
 
     ImGui::TableNextColumn();
-    ImGui::Text(T::SecHistory);
+    ImGui::Text("History");
 
     {
         ImGui::PushItemWidth(this->screen_rel_width(0.2));
         SW_SCOPEGUARD([] { ImGui::PopItemWidth(); });
 
         std::size_t history_size_min = 0;
-        ImGui::DragScalar(T::LblMaxEntries, ImGuiDataType_U64, &context.history_size, 0.05f, &history_size_min);
+        ImGui::DragScalar("Max entries", ImGuiDataType_U64, &context.history_size, 0.05f, &history_size_min);
     }
 
-    if (ImGui::Button(T::BtnClearHistory)) {
+    if (ImGui::Button("Clear history")) {
         for (auto &fs: this->context.filesystems) {
             if (fs->type == fs::Filesystem::Type::Recent)
                 reinterpret_cast<fs::RecentFs *>(fs.get())->clear();
@@ -958,7 +956,7 @@ void SettingsEditor::render() {
 
     // We would need to parse mpv.conf to be certain of the watch_later directory's location
     ImGui::SameLine();
-    if (ImGui::Button(T::BtnClearPositions)) {
+    if (ImGui::Button("Clear playback positions")) {
         auto path = fs::Path(Context::AppDirectory) / "watch_later";
 
         // Using rmdir would need to clear all the files inside beforehand, so just use a faster native call
@@ -967,7 +965,7 @@ void SettingsEditor::render() {
     }
 
     ImGui::NewLine();
-    ImGui::Text(T::SecUsb);
+    ImGui::Text("USB");
 
     if (ImGui::BeginTable("##usblistbox", 3, ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersOuter | ImGuiTableFlags_ScrollY,
             this->screen_rel_vec<ImVec2>(0.4, 0.2))) {
@@ -977,9 +975,9 @@ void SettingsEditor::render() {
         SW_SCOPEGUARD([&] { ImGui::SetWindowFontScale(1.0); });
 
         ImGui::TableSetupScrollFreeze(0, 1);
-        ImGui::TableSetupColumn(T::ColName,   ImGuiTableColumnFlags_WidthFixed, this->screen_rel_width(0.25));
-        ImGui::TableSetupColumn(T::ColType,   ImGuiTableColumnFlags_WidthFixed, this->screen_rel_width(0.05));
-        ImGui::TableSetupColumn(T::ColStatus, ImGuiTableColumnFlags_WidthFixed, this->screen_rel_width(0.1));
+        ImGui::TableSetupColumn("Name",   ImGuiTableColumnFlags_WidthFixed, this->screen_rel_width(0.25));
+        ImGui::TableSetupColumn("Type",   ImGuiTableColumnFlags_WidthFixed, this->screen_rel_width(0.05));
+        ImGui::TableSetupColumn("Status", ImGuiTableColumnFlags_WidthFixed, this->screen_rel_width(0.1));
         ImGui::TableHeadersRow();
 
         auto &devs = this->context.ums.get_devices();
@@ -996,7 +994,7 @@ void SettingsEditor::render() {
             ImGui::Text(LIBUSBHSFS_FS_TYPE_STR(dev.type));
 
             ImGui::TableNextColumn();
-            if (ImGui::Button(make_id(i, T::BtnUnmount))) {
+            if (ImGui::Button(make_id(i, "Unmount"))) {
                 std::erase_if(this->context.filesystems, [&dev](const auto &fs) {
                     return dev.mount_name == fs->mount_name;
                 });
@@ -1025,12 +1023,12 @@ void InfoHelp::render() {
 
     ImGui::TableNextColumn();
 
-    ImGui::Text(T::LblUsage);
+    ImGui::Text("Usage:");
 
     ImGui::Dummy(ImVec2(0, ImGui::GetFontSize() / 2));
 
     {
-        ImGui::SeparatorText(T::SecPlayback);
+        ImGui::SeparatorText("Playback");
 
         ImGui::Indent();
         SW_SCOPEGUARD([] { ImGui::Unindent(); });
@@ -1038,21 +1036,21 @@ void InfoHelp::render() {
         ImGui::SetWindowFontScale(0.9 * this->scale_factor());
         SW_SCOPEGUARD([this] { ImGui::SetWindowFontScale(this->scale_factor()); });
 
-        bullet_wrapped("\u041d\u0430\u0436\u043c\u0438\u0442\u0435 \ue045 \u0434\u043b\u044f \u0432\u044b\u0445\u043e\u0434\u0430");
-        bullet_wrapped("\u041d\u0430\u0436\u043c\u0438\u0442\u0435 \ue000 \u0438\u043b\u0438 \ue002 \u0434\u043b\u044f \u043f\u0430\u0443\u0437\u044b/\u0432\u043e\u0441\u043f\u0440\u043e\u0438\u0437\u0432\u0435\u0434\u0435\u043d\u0438\u044f");
-        bullet_wrapped("\u041d\u0430\u0436\u043c\u0438\u0442\u0435 \ue0a4/\ue0a5 \u0434\u043b\u044f \u043f\u0435\u0440\u0435\u043c\u043e\u0442\u043a\u0438 \u043d\u0430 \u00b15 \u0441\u0435\u043a, \u0438\u043b\u0438 \ue0a6/\ue0a7 \u0434\u043b\u044f \u00b160 \u0441\u0435\u043a");
-        bullet_wrapped("\u041d\u0430\u0436\u043c\u0438\u0442\u0435 \ue0a6/\ue0a7 \u0443\u0434\u0435\u0440\u0436\u0438\u0432\u0430\u044f \ue0af/\ue0b0 \u0434\u043b\u044f \u043f\u0435\u0440\u0435\u043a\u043b\u044e\u0447\u0435\u043d\u0438\u044f \u0433\u043b\u0430\u0432");
-        bullet_wrapped("\u0418\u0441\u043f\u043e\u043b\u044c\u0437\u0443\u0439\u0442\u0435 \ue0c1 \u0438\u043b\u0438 \u043f\u0440\u043e\u0432\u0435\u0434\u0438\u0442\u0435 \u043f\u0430\u043b\u044c\u0446\u0435\u043c \ue121 \u0434\u043b\u044f \u043f\u0435\u0440\u0435\u043c\u043e\u0442\u043a\u0438 \u0432\u043f\u0435\u0440\u0451\u0434/\u043d\u0430\u0437\u0430\u0434");
-        bullet_wrapped("\u0418\u0441\u043f\u043e\u043b\u044c\u0437\u0443\u0439\u0442\u0435 \ue0c2 \u0433\u043e\u0440\u0438\u0437\u043e\u043d\u0442\u0430\u043b\u044c\u043d\u043e \u0438\u043b\u0438 \u0432\u0435\u0434\u0438\u0442\u0435 \u043f\u043e \u043f\u0440\u0430\u0432\u043e\u0439 \u0447\u0430\u0441\u0442\u0438 \u044d\u043a\u0440\u0430\u043d\u0430 \ue121 \u0434\u043b\u044f \u0433\u0440\u043e\u043c\u043a\u043e\u0441\u0442\u0438");
-        bullet_wrapped("\u0418\u0441\u043f\u043e\u043b\u044c\u0437\u0443\u0439\u0442\u0435 \ue0c2 \u0432\u0435\u0440\u0442\u0438\u043a\u0430\u043b\u044c\u043d\u043e \u0438\u043b\u0438 \u0432\u0435\u0434\u0438\u0442\u0435 \u043f\u043e \u043b\u0435\u0432\u043e\u0439 \u0447\u0430\u0441\u0442\u0438 \u044d\u043a\u0440\u0430\u043d\u0430 \ue121 \u0434\u043b\u044f \u044f\u0440\u043a\u043e\u0441\u0442\u0438");
-        bullet_wrapped("\u041d\u0430\u0436\u043c\u0438\u0442\u0435 \ue081/\ue082 \u0434\u043b\u044f \u0441\u043a\u0440\u0438\u043d\u0448\u043e\u0442\u0430 \u0432 \u043e\u0440\u0438\u0433\u0438\u043d\u0430\u043b\u044c\u043d\u043e\u043c \u0440\u0430\u0437\u0440\u0435\u0448\u0435\u043d\u0438\u0438 \u0432\u0438\u0434\u0435\u043e");
-        bullet_wrapped("\u041d\u0430\u0436\u043c\u0438\u0442\u0435 \ue0b1/\ue0b2 \u0447\u0442\u043e\u0431\u044b \u043f\u043e\u043a\u0430\u0437\u0430\u0442\u044c \u043f\u0430\u043d\u0435\u043b\u044c \u0432\u043e\u0441\u043f\u0440\u043e\u0438\u0437\u0432\u0435\u0434\u0435\u043d\u0438\u044f, \ue001 \u0447\u0442\u043e\u0431\u044b \u0441\u043a\u0440\u044b\u0442\u044c");
+        bullet_wrapped("Press \ue045 to quit");
+        bullet_wrapped("Press \ue000 or \ue002 to pause/play");
+        bullet_wrapped("Press \ue0a4/\ue0a5 to seek \u00b15s, or \ue0a6/\ue0a7 for \u00b160s");
+        bullet_wrapped("Press \ue0a6/\ue0a7 while holding \ue0af/\ue0b0 to skip chapters");
+        bullet_wrapped("Use \ue0c1, or slide the touchscreen \ue121 to seek forward and backward");
+        bullet_wrapped("Use \ue0c2 horizontally, or slide the right side of the touchscreen \ue121 to adjust the volume");
+        bullet_wrapped("Use \ue0c2 vertically, or slide the left side of the touchscreen \ue121 to adjust the backlight brightness");
+        bullet_wrapped("Press \ue081/\ue082 to take a screenshot at the source video resolution");
+        bullet_wrapped("Press \ue0b1/\ue0b2 to show the playback bar, and \ue001 to hide it");
     }
 
     ImGui::Dummy(ImVec2(0, ImGui::GetFontSize() / 2));
 
     {
-        ImGui::SeparatorText(T::SecSettingsMenu);
+        ImGui::SeparatorText("Settings menu");
 
         ImGui::Indent();
         SW_SCOPEGUARD([] { ImGui::Unindent(); });
@@ -1060,14 +1058,15 @@ void InfoHelp::render() {
         ImGui::SetWindowFontScale(0.9 * this->scale_factor());
         SW_SCOPEGUARD([this] { ImGui::SetWindowFontScale(this->scale_factor()); });
 
-        bullet_wrapped("\u041d\u0430\u0436\u043c\u0438\u0442\u0435 \ue003 \u0434\u043b\u044f \u043e\u0442\u043a\u0440\u044b\u0442\u0438\u044f \u043c\u0435\u043d\u044e");
-        bullet_wrapped("\u0417\u0434\u0435\u0441\u044c \u043d\u0430\u0445\u043e\u0434\u044f\u0442\u0441\u044f \u043e\u0441\u043d\u043e\u0432\u043d\u044b\u0435 \u043d\u0430\u0441\u0442\u0440\u043e\u0439\u043a\u0438 \u0438 \u0441\u0442\u0430\u0442\u0438\u0441\u0442\u0438\u043a\u0430 \u0432\u043e\u0441\u043f\u0440\u043e\u0438\u0437\u0432\u0435\u0434\u0435\u043d\u0438\u044f");
+        bullet_wrapped("Press \ue003 to open the menu");
+        bullet_wrapped("Most relevant settings can be found here, "
+            "along with useful statistics on playback and performance");
     }
 
     ImGui::Dummy(ImVec2(0, ImGui::GetFontSize() / 2));
 
     {
-        ImGui::SeparatorText(T::SecConsole);
+        ImGui::SeparatorText("Console");
 
         ImGui::Indent();
         SW_SCOPEGUARD([] { ImGui::Unindent(); });
@@ -1075,10 +1074,11 @@ void InfoHelp::render() {
         ImGui::SetWindowFontScale(0.9 * this->scale_factor());
         SW_SCOPEGUARD([this] { ImGui::SetWindowFontScale(this->scale_factor()); });
 
-        bullet_wrapped("\u041d\u0430\u0436\u043c\u0438\u0442\u0435 \ue046 \u0434\u043b\u044f \u043e\u0442\u043a\u0440\u044b\u0442\u0438\u044f \u043a\u043e\u043d\u0441\u043e\u043b\u0438");
-        bullet_wrapped("\u0417\u0434\u0435\u0441\u044c \u043c\u043e\u0436\u043d\u043e \u0432\u044b\u043f\u043e\u043b\u043d\u044f\u0442\u044c \u043a\u043e\u043c\u0430\u043d\u0434\u044b mpv. \u041f\u043e\u0434\u0440\u043e\u0431\u043d\u0435\u0435: https://mpv.io/manual/master/#command-interface");
-        bullet_wrapped("\u041a\u043e\u043d\u0441\u043e\u043b\u044c \u0442\u0430\u043a\u0436\u0435 \u043e\u0442\u043e\u0431\u0440\u0430\u0436\u0430\u0435\u0442 \u0436\u0443\u0440\u043d\u0430\u043b \u043f\u043b\u0435\u0435\u0440\u0430");
-        bullet_wrapped("\u0423\u0440\u043e\u0432\u0435\u043d\u044c \u0436\u0443\u0440\u043d\u0430\u043b\u0438\u0440\u043e\u0432\u0430\u043d\u0438\u044f \u0440\u0435\u0433\u0443\u043b\u0438\u0440\u0443\u0435\u0442\u0441\u044f \u0432 \u043c\u0435\u043d\u044e (\u041f\u0440\u043e\u0447\u0435\u0435/\u0423\u0440\u043e\u0432\u0435\u043d\u044c \u0436\u0443\u0440\u043d\u0430\u043b\u0430)");
+        bullet_wrapped("Press \ue046 to open the console");
+        bullet_wrapped("Any mpv command can be executed here. For more information, "
+            "see: https://mpv.io/manual/master/#command-interface");
+        bullet_wrapped("The console also shows logs from the player core");
+        bullet_wrapped("The logging level can be adjusted in the menu (Misc/Log level)");
     }
 
     ImGui::TableNextColumn();
@@ -1086,7 +1086,7 @@ void InfoHelp::render() {
     ImGui::TextWrapped("%s %s", APP_TITLE, app_version_str.data());
 
     ImGui::Dummy(ImVec2(0, ImGui::GetFontSize() / 2));
-    ImGui::SeparatorText(T::SecLibraries);
+    ImGui::SeparatorText("Libraries");
     bullet_wrapped("FFmpeg: %s\n", av_version_info());
 
     {
@@ -1120,7 +1120,7 @@ void InfoHelp::render() {
         LIBUSBHSFS_VERSION_MINOR, LIBUSBHSFS_VERSION_MICRO);
 
     ImGui::Dummy(ImVec2(0, ImGui::GetFontSize() / 2));
-    ImGui::SeparatorText(T::SecBuiltOn);
+    ImGui::SeparatorText("Built on");
     ImGui::Text(" %s", app_build_date_str.data());
 }
 
