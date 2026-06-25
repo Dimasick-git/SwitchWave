@@ -74,6 +74,12 @@ jobs:
 
           while IFS= read -r file; do
             [ -z "$file" ] && continue
+            # Никогда не трогаем workflow-файлы: встроенный GITHUB_TOKEN не имеет права
+            # workflow, поэтому пуш изменений .github/workflows/* отклоняется.
+            if [[ "$file" == .github/workflows/* ]]; then
+              echo "  [SKIP workflow] $file"
+              continue
+            fi
 
             if [[ -n "${PROTECTED[$file]}" ]]; then
               echo "  [ПРОПУСК / SKIP] ${file}"
