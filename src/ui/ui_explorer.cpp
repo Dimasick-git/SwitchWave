@@ -7,7 +7,6 @@
 #include <imgui_deko3d.h>
 
 #include "utils.hpp"
-#include "i18n.hpp"
 
 #include "ui/ui_explorer.hpp"
 
@@ -236,7 +235,7 @@ void Explorer::render() {
     }
 
     ImGui::SetCursorPos(ImGui::GetCursorPos() + ImVec2(this->screen_rel_width(0.2), ImGui::GetStyle().ItemSpacing.y));
-    ImGui::Text("%s\ue0ea", T::NavHint);
+    ImGui::Text("Navigate with \ue0ea");
 }
 
 } // namespace sw::ui
