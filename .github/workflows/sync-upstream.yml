@@ -50,7 +50,6 @@ jobs:
         id: branch
         run: |
           BRANCH="sync/upstream-$(date +%Y%m%d-%H%M)"
-          git checkout -b "${BRANCH}"
           echo "name=${BRANCH}" >> $GITHUB_OUTPUT
 
       - name: Применить изменения (кроме защищённых) / Apply changes (skip protected files)
@@ -95,30 +94,13 @@ jobs:
           echo ""
           echo "Применено / Applied: ${APPLIED}, пропущено / skipped: ${SKIPPED}"
 
-      - name: Коммит изменений / Commit changes
-        if: steps.changes.outputs.count != '0' && inputs.dry_run != 'true'
-        id: commit
-        run: |
-          git add -A
-          if git diff --staged --quiet; then
-            echo "Нет изменений после фильтрации / No changes after filtering"
-            echo "has_changes=false" >> $GITHUB_OUTPUT
-          else
-            UPSTREAM_VERSION=$(git show upstream/master:Makefile 2>/dev/null | grep '^APP_VERSION' | sed 's/.*:=\s*//' | tr -d ' ' || echo "unknown")
-            git commit -m "sync: обновление из averne/SwitchWave upstream (v${UPSTREAM_VERSION})"
-            echo "has_changes=true" >> $GITHUB_OUTPUT
-          fi
-
-      - name: Отправить ветку / Push branch
-        if: steps.changes.outputs.count != '0' && steps.commit.outputs.has_changes == 'true' && inputs.dry_run != 'true'
-        run: |
-          git push origin "${{ steps.branch.outputs.name }}"
-
       - name: Создать Pull Request / Create Pull Request
-        if: steps.changes.outputs.count != '0' && steps.commit.outputs.has_changes == 'true' && inputs.dry_run != 'true'
+        if: steps.changes.outputs.count != '0' && inputs.dry_run != 'true'
         uses: peter-evans/create-pull-request@v6
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
+          base: ${{ github.event.repository.default_branch }}
+          commit-message: "sync: обновление из averne/SwitchWave upstream"
           branch: ${{ steps.branch.outputs.name }}
           title: "sync: обновление из upstream averne/SwitchWave"
           body: |
