@@ -3,7 +3,7 @@ ifeq ($(strip $(DEVKITPRO)),)
 endif
 
 APP_TITLE               :=  SwitchWave
-APP_AUTHOR              :=  averne, Dimasick-git
+APP_AUTHOR              :=  averne
 APP_ICON                :=  icon.jpg
 APP_VERSION             :=  1.1.1
 APP_COMMIT              :=  $(shell git rev-parse --short HEAD)
