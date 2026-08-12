@@ -14,7 +14,7 @@ jobs:
 
     steps:
       - name: Получить код / Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           submodules: recursive
           fetch-depth: 0
@@ -40,11 +40,11 @@ jobs:
 
       - name: Настроить Docker Buildx / Set up Docker Buildx
         if: steps.check_tag.outputs.exists == 'false'
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
 
       - name: Собрать образ сборщика / Build toolchain image
         if: steps.check_tag.outputs.exists == 'false'
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           load: true
@@ -58,7 +58,7 @@ jobs:
 
       - name: Создать релиз / Create release
         if: steps.check_tag.outputs.exists == 'false'
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ steps.version.outputs.tag }}
           name: "SwitchWave ${{ steps.version.outputs.tag }}"

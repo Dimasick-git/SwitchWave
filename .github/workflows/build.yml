@@ -10,7 +10,7 @@ jobs:
 
     steps:
       - name: Получить код / Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           submodules: recursive
 
@@ -22,10 +22,10 @@ jobs:
           echo "Версия / Version: ${VERSION}"
 
       - name: Настроить Docker Buildx / Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
 
       - name: Собрать образ сборщика / Build toolchain image
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           load: true
@@ -37,7 +37,7 @@ jobs:
         run: ./build-docker.sh
 
       - name: Загрузить артефакт / Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: SwitchWave-${{ steps.version.outputs.version }}-${{ github.sha }}
           path: build/SwitchWave-*.zip
