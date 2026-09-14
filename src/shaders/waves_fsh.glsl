@@ -32,28 +32,28 @@ layout (std140, binding = 0) uniform FragUBO {
 } ubo;
 
 float timestamp_to_s(uint timestamp) {
-    return float(timestamp * 625.0 / 384.0e9);
+    return float(timestamp) * (625.0 / 384.0e9);
 }
 
 #define SMOOTHSTEP_HEIGHT 0.5
 
 float draw_wave(WaveParams p, float delta) {
     float w = p.amplitude * sin(p.freq * in_pos.x + p.phase * delta) + p.offset;
-    if (in_pos.y <= w)
-        return smoothstep(w - SMOOTHSTEP_HEIGHT, w, in_pos.y);
-    else
-        return 0.0;
+    float t = clamp(1.0 + (in_pos.y - w) * (1.0 / SMOOTHSTEP_HEIGHT), 0.0, 1.0);
+    return t * t * (3.0 - 2.0 * t) * step(in_pos.y, w);
 }
 
 void main() {
     float delta = timestamp_to_s(ubo.timestamp_lo);
 
-    float val = 0;
-    val = max(val, mix(val, draw_wave(ubo.wave_params[0], delta), 0.5));
-    val = max(val, mix(val, draw_wave(ubo.wave_params[1], delta), 0.5));
-    val = max(val, mix(val, draw_wave(ubo.wave_params[2], delta), 0.5));
-    val = max(val, mix(val, draw_wave(ubo.wave_params[3], delta), 0.5));
-    val = max(val, mix(val, draw_wave(ubo.wave_params[4], delta), 0.5));
+    // max(a, mix(a, b, 0.5)) == 0.5 * (a + max(a, b)).
+    // Wave intensities are nonnegative, so the first blend needs only a scale.
+    float val = 0.0;
+    val = 0.5 * (val + max(val, draw_wave(ubo.wave_params[0], delta)));
+    val = 0.5 * (val + max(val, draw_wave(ubo.wave_params[1], delta)));
+    val = 0.5 * (val + max(val, draw_wave(ubo.wave_params[2], delta)));
+    val = 0.5 * (val + max(val, draw_wave(ubo.wave_params[3], delta)));
+    val = 0.5 * (val + max(val, draw_wave(ubo.wave_params[4], delta)));
     val *= ubo.alpha;
 
     out_col = vec4(val, val, val, 1.0);
