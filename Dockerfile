@@ -26,7 +26,7 @@ ENV DEVKITPRO=/opt/devkitpro
 ENV PORTLIBS_PREFIX=${DEVKITPRO}/portlibs/switch
 
 # Build libusbhsfs (GPL)
-RUN git clone --depth 1 https://github.com/DarkMatterCore/libusbhsfs.git /tmp/libusbhsfs \
+RUN git clone --depth 1 -b dev https://github.com/DarkMatterCore/libusbhsfs.git /tmp/libusbhsfs \
     && cd /tmp/libusbhsfs \
     && source ${DEVKITPRO}/switchvars.sh \
     && make BUILD_TYPE=gpl install \
